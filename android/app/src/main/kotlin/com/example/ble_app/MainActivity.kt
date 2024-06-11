@@ -112,46 +112,42 @@ class MainActivity : FlutterActivity() {
     }
 
     private fun connectToDevice(deviceId: String, result: MethodChannel.Result) {
-        if (allPermissionsGranted()) {
-            val device = bluetoothAdapter.getRemoteDevice(deviceId)
-            bluetoothGatt = device.connectGatt(this, false, object : BluetoothGattCallback() {
-                override fun onConnectionStateChange(gatt: BluetoothGatt, status: Int, newState: Int) {
-                    if (newState == BluetoothProfile.STATE_CONNECTED) {
-                        gatt.discoverServices()
-                    }
+    if (allPermissionsGranted()) {
+        val device = bluetoothAdapter.getRemoteDevice(deviceId)
+        bluetoothGatt = device.connectGatt(this, false, object : BluetoothGattCallback() {
+            override fun onConnectionStateChange(gatt: BluetoothGatt, status: Int, newState: Int) {
+                if (newState == BluetoothProfile.STATE_CONNECTED) {
+                    gatt.discoverServices()
                 }
+            }
 
-                override fun onServicesDiscovered(gatt: BluetoothGatt, status: Int) {
-                    val servicesList = mutableListOf<Map<String, String>>()
+            override fun onServicesDiscovered(gatt: BluetoothGatt, status: Int) {
+                val servicesList = mutableListOf<Map<String, Any>>()
+
+                for (service in gatt.services) {
+                    val serviceInfo = mutableMapOf<String, Any>()
+                    serviceInfo["uuid"] = service.uuid.toString()
+                    serviceInfo["name"] = getServiceName(service.uuid)
+
                     val characteristicsList = mutableListOf<Map<String, String>>()
-
-                    for (service in gatt.services) {
-                        val serviceInfo = mapOf(
-                            "uuid" to service.uuid.toString(),
-                            "name" to getServiceName(service.uuid)
-                        )
-                        servicesList.add(serviceInfo)
-
-                        for (characteristic in service.characteristics) {
-                            val characteristicInfo = mapOf(
-                                "uuid" to characteristic.uuid.toString(),
-                                "name" to getCharacteristicName(characteristic.uuid)
-                            )
-                            characteristicsList.add(characteristicInfo)
-                        }
+                    for (characteristic in service.characteristics) {
+                        val characteristicInfo = mutableMapOf<String, String>()
+                        characteristicInfo["uuid"] = characteristic.uuid.toString()
+                        characteristicInfo["name"] = getCharacteristicName(characteristic.uuid)
+                        characteristicsList.add(characteristicInfo)
                     }
-
-                    val resultMap = mapOf(
-                        "services" to servicesList,
-                        "characteristics" to characteristicsList
-                    )
-                    result.success(resultMap)
+                    serviceInfo["characteristics"] = characteristicsList
+                    servicesList.add(serviceInfo)
                 }
-            })
-        } else {
-            result.error("PERMISSION_DENIED", "Bluetooth permissions are not granted", null)
-        }
+
+                result.success(servicesList)
+            }
+        })
+    } else {
+        result.error("PERMISSION_DENIED", "Bluetooth permissions are not granted", null)
     }
+}
+
 
     private fun getServiceName(uuid: UUID): String {
         return when (uuid) {

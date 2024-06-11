@@ -1,5 +1,6 @@
 // ignore_for_file: avoid_print
 
+import 'package:ble_app/models/bluetooth_service_model.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:logger/logger.dart';
@@ -31,7 +32,7 @@ class BleHomePage extends StatefulWidget {
 class BleHomePageState extends State<BleHomePage> {
   static const platform = MethodChannel('ble.flutter.dev/ble');
   List<Map<String, String>> devices = [];
-  List<Map<String, String>> services = [];
+  List<BluetoothService> services = [];
   List<Map<String, String>> characteristics = [];
 
   Future<List<Map<String, String>>> scanForDevices() async {
@@ -47,14 +48,24 @@ class BleHomePageState extends State<BleHomePage> {
 
   Future<void> connectToDevice(String deviceId) async {
     try {
-      final Map<Object?, Object?> result = await platform
+      final List<dynamic> result = await platform
           .invokeMethod('connectToDevice', {'deviceId': deviceId});
-      services = (result['services'] as List)
-          .map((e) => Map<String, String>.from(e))
-          .toList();
-      characteristics = (result['characteristics'] as List)
-          .map((e) => Map<String, String>.from(e))
-          .toList();
+
+      services = result.map((service) {
+        List<Characteristic> characteristicList =
+            (service['characteristics'] as List).map((char) {
+          return Characteristic(
+            uuid: char['uuid'] ?? 'Unknown UUID',
+            name: char['name'] ?? 'Unknown Characteristic',
+          );
+        }).toList();
+
+        return BluetoothService(
+          uuid: service['uuid'] ?? 'Unknown UUID',
+          name: service['name'] ?? 'Unknown Service',
+          characteristics: characteristicList,
+        );
+      }).toList();
       _showDeviceSettingsModal(deviceId);
     } on PlatformException catch (e) {
       logger.e("Failed to connect to device: '${e.message}'.");
@@ -75,17 +86,31 @@ class BleHomePageState extends State<BleHomePage> {
               Text('Device ID: $deviceId'),
               const Text('Services:',
                   style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-              ...services.map((service) => ListTile(
-                    title: Text(service['name'] ?? 'Unknown Service'),
-                    subtitle: Text(service['uuid'] ?? ''),
-                  )),
-              const Text('Characteristics:',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-              ...characteristics.map((characteristic) => ListTile(
-                    title: Text(
-                        characteristic['name'] ?? 'Unknown Characteristic'),
-                    subtitle: Text(characteristic['uuid'] ?? ''),
-                  ))
+              ...services.map((service) {
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    ListTile(
+                      title: Text('Service name: ${service.name}',
+                          style: const TextStyle(
+                              fontSize: 16, fontWeight: FontWeight.bold)),
+                      subtitle: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'Characteristics:',
+                          ),
+                          ...service.characteristics
+                              .map<Widget>((characteristic) => ListTile(
+                                    title: Text(characteristic.name),
+                                    // subtitle: Text(characteristic.uuid),
+                                  )),
+                        ],
+                      ),
+                    ),
+                  ],
+                );
+              }),
             ],
           ),
         );
