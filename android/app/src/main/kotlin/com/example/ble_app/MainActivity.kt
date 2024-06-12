@@ -1,3 +1,25 @@
+/**
+ * Scans for Bluetooth LE devices and returns a list of discovered devices.
+ *
+ * This method requests the necessary Bluetooth permissions, starts a Bluetooth LE scan,
+ * and returns a list of discovered devices after a 10-second scan period.
+ *
+ * @param result The MethodChannel.Result to be used to return the list of scanned devices.
+ */
+private fun scanForDevices(result: MethodChannel.Result)
+
+/**
+ * Connects to a Bluetooth LE device and retrieves its services and characteristics.
+ *
+ * This method requests the necessary Bluetooth permissions, connects to the device with the
+ * provided device ID, discovers the device's services, and reads the characteristics of
+ * those services. The discovered services and characteristics are returned through the
+ * provided MethodChannel.Result.
+ *
+ * @param deviceId The ID of the Bluetooth LE device to connect to.
+ * @param result The MethodChannel.Result to be used to return the discovered services and characteristics.
+ */
+private fun connectToDevice(deviceId: String, result: MethodChannel.Result)
 package com.example.ble_app
 
 import android.Manifest
@@ -66,6 +88,17 @@ class MainActivity : FlutterActivity() {
         }
     }
 
+    /**
+     * Configures the Flutter engine and sets up a method channel for handling BLE-related operations.
+     *
+     * The method channel is used to handle two methods:
+     * - "scanForDevices": Scans for nearby Bluetooth LE devices and returns a list of discovered devices.
+     * - "connectToDevice": Connects to a Bluetooth LE device with the specified device ID.
+     *
+     * This method is called during the initialization of the MainActivity.
+     *
+     * @param flutterEngine The Flutter engine to be configured.
+     */
     override fun configureFlutterEngine(@NonNull flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CHANNEL).setMethodCallHandler { call, result ->
@@ -84,6 +117,16 @@ class MainActivity : FlutterActivity() {
         }
     }
 
+   /**
+    * Scans for nearby Bluetooth LE devices and returns a list of discovered devices.
+    *
+    * This method is called when the "scanForDevices" method is invoked on the Flutter side.
+    * It checks if the necessary permissions are granted, starts a Bluetooth LE scan, and
+    * collects the discovered devices in a list. The list is then returned to the Flutter
+    * side through the result callback.
+    *
+    * @param result The MethodChannel.Result object to be used to return the list of discovered devices.
+    */
    private fun scanForDevices(result: MethodChannel.Result) {
     if (allPermissionsGranted()) {
         val bluetoothManager = getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager
@@ -121,6 +164,14 @@ class MainActivity : FlutterActivity() {
 }
 
 
+   /**
+    * Connects to a Bluetooth LE device with the given device ID and retrieves its services and characteristics.
+    *
+    * This method is called when the "connectToDevice" method is invoked on the Flutter side. It checks if the necessary permissions are granted, connects to the specified Bluetooth LE device, discovers its services, and reads the characteristics of those services. The discovered services and characteristics are then returned to the Flutter side through the result callback.
+    *
+    * @param deviceId The ID of the Bluetooth LE device to connect to.
+    * @param result The MethodChannel.Result object to be used to return the discovered services and characteristics.
+    */
    private fun connectToDevice(deviceId: String, result: MethodChannel.Result) {
     if (allPermissionsGranted()) {
         val device = bluetoothAdapter.getRemoteDevice(deviceId)

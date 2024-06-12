@@ -1,3 +1,4 @@
 # ble_app
 
-A new Flutter project.
+* The setup is standart
+* In the root folder there are debug and release apk files.

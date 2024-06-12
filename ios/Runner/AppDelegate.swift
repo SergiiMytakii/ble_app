@@ -1,3 +1,12 @@
+/// The `AppDelegate` class is the main entry point for the iOS app. It handles the initialization of the Bluetooth Central Manager, sets up a Flutter method channel, and implements the necessary delegate methods to handle Bluetooth device discovery, connection, and characteristic updates.
+///
+/// The class provides the following functionality:
+/// - Scans for Bluetooth devices and returns a list of discovered devices
+/// - Connects to a specific Bluetooth device by its ID
+/// - Discovers services and characteristics of the connected device
+/// - Reads the values of the discovered characteristics
+///
+/// The class uses the `CBCentralManager` and `CBPeripheralDelegate` protocols to interact with the Bluetooth stack on iOS.
 import UIKit
 import Flutter
 import CoreBluetooth
@@ -12,6 +21,7 @@ import CoreBluetooth
   private var discoveredPeripherals: [String: CBPeripheral] = [:]
   private var servicesList: [[String: Any]] = []
 
+ 
   override func application(
     _ application: UIApplication,
     didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
@@ -44,6 +54,11 @@ import CoreBluetooth
     return super.application(application, didFinishLaunchingWithOptions: launchOptions)
   }
   
+  /// Scans for Bluetooth devices and returns a list of discovered devices.
+  ///
+  /// This method initiates a Bluetooth scan and waits for 10 seconds before stopping the scan. The discovered devices are then mapped to a list of dictionaries, where each dictionary contains the device ID and name. The list of devices is then returned to the caller via the `scanResult` callback.
+  ///
+  /// - Note: This method assumes that the necessary Bluetooth permissions have been granted by the user.
   private func scanForDevices() {
     discoveredPeripherals.removeAll()
     centralManager?.scanForPeripherals(withServices: nil, options: nil)
@@ -55,6 +70,11 @@ import CoreBluetooth
     }
   }
   
+  /// Connects to the Bluetooth device with the specified ID.
+  ///
+  /// This method first checks if the device with the given ID has been discovered during the previous scan. If the device is found, it connects to the device using the `CBCentralManager` instance. If the device is not found, it calls the `connectResult` callback with a `FlutterError` indicating that the device was not found.
+  ///
+  /// - Parameter deviceId: The unique identifier of the Bluetooth device to connect to.
   private func connectToDevice(deviceId: String) {
     if let peripheral = discoveredPeripherals[deviceId] {
       self.servicesList.removeAll()
@@ -85,6 +105,13 @@ extension AppDelegate: CBCentralManagerDelegate {
   }
 }
 
+/// This extension implements the `CBPeripheralDelegate` protocol to handle events related to the discovered Bluetooth services and characteristics.
+///
+/// - `peripheral(_:didDiscoverServices:)`: Handles the discovery of services on the connected Bluetooth peripheral. It iterates through the discovered services, creates a dictionary for each service, and adds it to the `servicesList` array. It then calls `discoverCharacteristics(_:for:)` to discover the characteristics for each service.
+///
+/// - `peripheral(_:didDiscoverCharacteristicsFor:error:)`: Handles the discovery of characteristics for a service. It iterates through the discovered characteristics, checks if they allow reading, and reads the value of the characteristic. The characteristic information, including the UUID, name, and value, is then added to the corresponding service in the `servicesList` array.
+///
+/// - `peripheral(_:didUpdateValueFor:error:)`: Handles the update of a characteristic's value. It converts the characteristic value to a hexadecimal string and adds the characteristic information, including the UUID, name, and value, to the corresponding service in the `servicesList` array. Finally, it calls the `connectResult` callback with the updated `servicesList` and disconnects from the peripheral.
 extension AppDelegate: CBPeripheralDelegate {
   func peripheral(_ peripheral: CBPeripheral, didDiscoverServices error: Error?) {
     if let error = error {

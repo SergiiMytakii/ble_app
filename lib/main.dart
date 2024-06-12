@@ -35,6 +35,16 @@ class BleHomePageState extends State<BleHomePage> {
   List<BluetoothService> services = [];
   List<Map<String, String>> characteristics = [];
 
+  /// Scans for available Bluetooth devices and returns a list of their IDs and names.
+  ///
+  /// This method uses a platform channel to invoke the native Bluetooth functionality and retrieve a list of discovered devices.
+  ///
+  /// If the scan is successful, the method returns a list of maps, where each map contains the device ID and name.
+  ///
+  /// If there is an error scanning for devices, the method logs the error message using the [logger] instance and returns an empty list.
+  ///
+  /// Returns:
+  /// A list of maps, where each map contains the device ID and name.
   Future<List<Map<String, String>>> scanForDevices() async {
     try {
       final List<dynamic> result =
@@ -46,6 +56,16 @@ class BleHomePageState extends State<BleHomePage> {
     }
   }
 
+  /// Connects to the Bluetooth device with the specified [deviceId] and retrieves the list of services and characteristics for that device.
+  ///
+  /// This method uses a platform channel to invoke the native Bluetooth functionality and retrieve the device's services and characteristics.
+  ///
+  /// If the connection is successful, the method updates the [services] list with the retrieved services and their characteristics. It then calls the [_showDeviceSettingsModal] method to display a modal bottom sheet with the device settings.
+  ///
+  /// If there is an error connecting to the device, the method logs the error message using the [logger] instance.
+  ///
+  /// Parameters:
+  /// - [deviceId]: The ID of the Bluetooth device to connect to.
   Future<void> connectToDevice(String deviceId) async {
     try {
       final List<dynamic> result = await platform
@@ -73,6 +93,11 @@ class BleHomePageState extends State<BleHomePage> {
     }
   }
 
+  /// Displays a modal bottom sheet with device settings, including the device ID and a list of services and their characteristics.
+  ///
+  /// The modal is displayed when the user taps the "arrow forward" icon on a device in the list of scanned devices.
+  ///
+  /// The [deviceId] parameter is the ID of the device to display the settings for.
   void _showDeviceSettingsModal(String deviceId) {
     showModalBottomSheet(
       context: context,
@@ -120,6 +145,12 @@ class BleHomePageState extends State<BleHomePage> {
   }
 
   @override
+
+  /// Builds the main app UI, which displays a list of scanned Bluetooth devices.
+  ///
+  /// The UI includes a loading spinner and error handling when scanning for devices.
+  /// When a device is selected, the [_showDeviceSettingsModal] function is called to display
+  /// the device's settings in a modal bottom sheet.
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('BLE App')),
