@@ -57,6 +57,7 @@ class BleHomePageState extends State<BleHomePage> {
           return Characteristic(
             uuid: char['uuid'] ?? 'Unknown UUID',
             name: char['name'] ?? 'Unknown Characteristic',
+            value: char['value'] ?? 'Unknown',
           );
         }).toList();
 
@@ -103,7 +104,7 @@ class BleHomePageState extends State<BleHomePage> {
                           ...service.characteristics
                               .map<Widget>((characteristic) => ListTile(
                                     title: Text(characteristic.name),
-                                    // subtitle: Text(characteristic.uuid),
+                                    subtitle: Text(characteristic.value),
                                   )),
                         ],
                       ),
