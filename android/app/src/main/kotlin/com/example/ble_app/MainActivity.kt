@@ -15,6 +15,9 @@ import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
 import java.util.*
+import com.example.ble_app.BluetoothUtils
+import kotlin.collections.mutableMapOf 
+
 
 class MainActivity : FlutterActivity() {
     private val CHANNEL = "ble.flutter.dev/ble"
@@ -111,60 +114,156 @@ class MainActivity : FlutterActivity() {
         }
     }
 
-    private fun connectToDevice(deviceId: String, result: MethodChannel.Result) {
+  private fun connectToDevice(deviceId: String, result: MethodChannel.Result) {
     if (allPermissionsGranted()) {
         val device = bluetoothAdapter.getRemoteDevice(deviceId)
-        bluetoothGatt = device.connectGatt(this, false, object : BluetoothGattCallback() {
-            override fun onConnectionStateChange(gatt: BluetoothGatt, status: Int, newState: Int) {
-                if (newState == BluetoothProfile.STATE_CONNECTED) {
-                    gatt.discoverServices()
-                }
-            }
+        var retryCount = 0
+        val maxRetries = 3
 
-            override fun onServicesDiscovered(gatt: BluetoothGatt, status: Int) {
+        fun connect() {
+            bluetoothGatt = device.connectGatt(this, false, object : BluetoothGattCallback() {
                 val servicesList = mutableListOf<Map<String, Any>>()
+                var characteristicsToRead = 0
+                var characteristicsRead = 0
+                val servicesListMap = mutableMapOf<String, mutableMapOf<String, Any>>()
 
-                for (service in gatt.services) {
-                    val serviceInfo = mutableMapOf<String, Any>()
-                    serviceInfo["uuid"] = service.uuid.toString()
-                    serviceInfo["name"] = getServiceName(service.uuid)
-
-                    val characteristicsList = mutableListOf<Map<String, String>>()
-                    for (characteristic in service.characteristics) {
-                        val characteristicInfo = mutableMapOf<String, String>()
-                        characteristicInfo["uuid"] = characteristic.uuid.toString()
-                        characteristicInfo["name"] = getCharacteristicName(characteristic.uuid)
-                        characteristicsList.add(characteristicInfo)
+                override fun onConnectionStateChange(gatt: BluetoothGatt, status: Int, newState: Int) {
+                    println("onConnectionStateChange: newState = $newState, status = $status")
+                    if (newState == BluetoothProfile.STATE_CONNECTED) {
+                        println("Connected to GATT server. Discovering services...")
+                        gatt.requestConnectionPriority(BluetoothGatt.CONNECTION_PRIORITY_HIGH)
+                        gatt.requestMtu(512) // Request higher MTU size
+                        gatt.discoverServices()
+                    } else if (newState == BluetoothProfile.STATE_DISCONNECTED) {
+                        println("Disconnected from GATT server.")
+                        if (status == 133 && retryCount < maxRetries) {
+                            println("Connection failed with status 133. Retrying... ($retryCount/$maxRetries)")
+                            retryCount++
+                            connect()
+                        } else {
+                            if (characteristicsRead != characteristicsToRead) {
+                                result.error("DISCONNECTED", "Disconnected before reading all characteristics", null)
+                            }
+                        }
                     }
-                    serviceInfo["characteristics"] = characteristicsList
-                    servicesList.add(serviceInfo)
                 }
 
-                result.success(servicesList)
+                override fun onMtuChanged(gatt: BluetoothGatt, mtu: Int, status: Int) {
+                    println("onMtuChanged: mtu = $mtu, status = $status")
+                    if (status == BluetoothGatt.GATT_SUCCESS) {
+                        println("MTU size successfully changed to $mtu")
+                    } else {
+                        println("Failed to change MTU size")
+                    }
+                }
+/*
+{0000200-20220: 
+    {uuid: 0000200-20220,
+    name: service,
+    characteristics: [
+        {uuid:00180-000,
+        name: device name,
+        value: iphone},
+         {uuid:00180-000,
+        name: battery,
+        value: 80%},
+    ]},
+ 0000-10110:   {uuid: 0000-10110,
+    name: service,
+    characteristics: [
+        uuid:00180-000,
+        name: device name,
+        value: iphone
+    }
+
             }
-        })
+ */ 
+
+                override fun onServicesDiscovered(gatt: BluetoothGatt, status: Int) {
+                    println("onServicesDiscovered: status = $status")
+                    if (status == BluetoothGatt.GATT_SUCCESS) {
+                        for (service in gatt.services) {
+                            val serviceInfo = mutableMapOf<String, Any>()
+                            serviceInfo["uuid"] = service.uuid.toString()
+                            serviceInfo["name"] = BluetoothUtils.getServiceName(service.uuid)
+
+                            val characteristicsList = mutableListOf<Map<String, Any>>()
+                            for (characteristic in service.characteristics) {
+                                println("Reading characteristic: ${characteristic.uuid}")
+                                characteristicsToRead++
+                                gatt.readCharacteristic(characteristic)
+                            }
+                            serviceInfo["characteristics"] = characteristicsList //empty now
+                            // servicesList.add(serviceInfo)
+                            servicesListMap[service.uuid.toString()] = serviceInfo
+                        }
+                        println(" servicesList after Reading characteristic init'")
+                   
+
+                        if (characteristicsToRead == 0) {
+                            println("No characteristics to read. Returning services list.")
+                            result.success(servicesList)
+                            gatt.disconnect()
+                        }
+                    } else {
+                        result.error("SERVICE_DISCOVERY_FAILED", "Failed to discover services", null)
+                        gatt.disconnect()
+                    }
+                }
+
+                override fun onCharacteristicRead(
+                    gatt: BluetoothGatt,
+                    characteristic: BluetoothGattCharacteristic,
+                    status: Int
+                ) {
+                    println("onCharacteristicRead: status = $status, characteristic = ${characteristic.uuid}")
+                    if (status == BluetoothGatt.GATT_SUCCESS) {
+                        val characteristicInfo = mutableMapOf<String, Any>()
+                        characteristicInfo["uuid"] = characteristic.uuid.toString()
+                        characteristicInfo["name"] = BluetoothUtils.getCharacteristicName(characteristic.uuid)
+                        characteristicInfo["value"] = characteristic.value
+
+                        // Add characteristic info to the respective service's characteristics list
+                        val serviceUuid = characteristic.service.uuid.toString()
+                        servicesListMap[serviceUuid]["characteristics"]?.add(characteristicInfo)
+                    } else {
+                        println("Failed to read characteristic: ${characteristic.uuid}")
+                    }
+
+                    characteristicsRead++
+                    println("Characteristics read: $characteristicsRead/$characteristicsToRead")
+                    if (characteristicsRead == characteristicsToRead) {
+                        println("All characteristics read. Returning services list.")
+                        result.success(servicesListMap.values.toList())
+                        gatt.disconnect()
+                    }
+                }
+
+                override fun onDescriptorRead(gatt: BluetoothGatt?, descriptor: BluetoothGattDescriptor?, status: Int) {
+                    println("onDescriptorRead: status = $status, descriptor = ${descriptor?.uuid}")
+                }
+
+                override fun onDescriptorWrite(gatt: BluetoothGatt?, descriptor: BluetoothGattDescriptor?, status: Int) {
+                    println("onDescriptorWrite: status = $status, descriptor = ${descriptor?.uuid}")
+                }
+
+                override fun onReliableWriteCompleted(gatt: BluetoothGatt?, status: Int) {
+                    println("onReliableWriteCompleted: status = $status")
+                }
+
+                override fun onReadRemoteRssi(gatt: BluetoothGatt?, rssi: Int, status: Int) {
+                    println("onReadRemoteRssi: rssi = $rssi, status = $status")
+                }
+            })
+        }
+
+        connect()
     } else {
         result.error("PERMISSION_DENIED", "Bluetooth permissions are not granted", null)
     }
 }
 
 
-    private fun getServiceName(uuid: UUID): String {
-        return when (uuid) {
-            UUID.fromString("00001800-0000-1000-8000-00805f9b34fb") -> "Generic Access"
-            UUID.fromString("00001801-0000-1000-8000-00805f9b34fb") -> "Generic Attribute"
-            UUID.fromString("0000180a-0000-1000-8000-00805f9b34fb") -> "Device Information"
 
-            else -> "Unknown Service"
-        }
-    }
 
-    private fun getCharacteristicName(uuid: UUID): String {
-        return when (uuid) {
-            UUID.fromString("00002a00-0000-1000-8000-00805f9b34fb") -> "Device Name"
-            UUID.fromString("00002a01-0000-1000-8000-00805f9b34fb") -> "Appearance"
-            UUID.fromString("00002a29-0000-1000-8000-00805f9b34fb") -> "Manufacturer Name String"
-            else -> "Unknown Characteristic"
-        }
-    }
 }
