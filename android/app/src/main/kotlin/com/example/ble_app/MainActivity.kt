@@ -2,8 +2,10 @@ package com.example.ble_app
 
 import android.Manifest
 import android.bluetooth.*
+import android.bluetooth.le.*
 import android.content.Context
 import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -13,6 +15,8 @@ import androidx.core.content.ContextCompat
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
+import java.util.*
+import com.example.ble_app.BluetoothUtils
 
 class MainActivity : FlutterActivity() {
     private val CHANNEL = "ble.flutter.dev/ble"
@@ -57,7 +61,7 @@ class MainActivity : FlutterActivity() {
             if (allPermissionsGranted()) {
                 configureFlutterEngine(flutterEngine!!)
             } else {
-                // Handle the permission denial
+                println("Permission denyed")
             }
         }
     }
@@ -80,14 +84,17 @@ class MainActivity : FlutterActivity() {
         }
     }
 
-    private fun scanForDevices(result: MethodChannel.Result) {
-        if (allPermissionsGranted()) {
-            val bluetoothManager = getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager
-            bluetoothAdapter = bluetoothManager.adapter
+   private fun scanForDevices(result: MethodChannel.Result) {
+    if (allPermissionsGranted()) {
+        val bluetoothManager = getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager
+        bluetoothAdapter = bluetoothManager.adapter
+        val scanner = bluetoothAdapter.bluetoothLeScanner
 
-            val scannedDevices = mutableListOf<Map<String, String>>()
+        val scannedDevices = mutableListOf<Map<String, String>>()
 
-            val leScanCallback = BluetoothAdapter.LeScanCallback { device, _, _ ->
+        val scanCallback = object : ScanCallback() {
+            override fun onScanResult(callbackType: Int, result: ScanResult) {
+                val device = result.device
                 val deviceInfo = mapOf(
                     "id" to device.address,
                     "name" to (device.name ?: "Unknown Device")
@@ -97,17 +104,22 @@ class MainActivity : FlutterActivity() {
                 }
             }
 
-            bluetoothAdapter.startLeScan(leScanCallback)
-
-            // Stop the scan after the SCAN_PERIOD
-            Handler(Looper.getMainLooper()).postDelayed({
-                bluetoothAdapter.stopLeScan(leScanCallback)
-                result.success(scannedDevices)
-            }, SCAN_PERIOD)
-        } else {
-            result.error("PERMISSION_DENIED", "Bluetooth permissions are not granted", null)
+            override fun onScanFailed(errorCode: Int) {
+                println("Scan failed with error: $errorCode")
+            }
         }
+
+        scanner.startScan(scanCallback)
+
+        Handler(Looper.getMainLooper()).postDelayed({
+            scanner.stopScan(scanCallback)
+            result.success(scannedDevices)
+        }, SCAN_PERIOD)
+    } else {
+        result.error("PERMISSION_DENIED", "Bluetooth permissions are not granted", null)
     }
+}
+
 
    private fun connectToDevice(deviceId: String, result: MethodChannel.Result) {
     if (allPermissionsGranted()) {
